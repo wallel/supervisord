@@ -1,3 +1,4 @@
+
 // +build !windows,!darwin
 
 package signals
@@ -7,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+    "strconv"
 )
 
 var signalMap = map[string]os.Signal{"SIGABRT": syscall.SIGABRT,
@@ -47,6 +49,10 @@ var signalMap = map[string]os.Signal{"SIGABRT": syscall.SIGABRT,
 
 // ToSignal returns OS dependent signal name for given signal name (or syscall.SIGTERM if garbage given)
 func ToSignal(signalName string) (os.Signal, error) {
+    num, err := strconv.Atoi(signalName)
+    if err ==nil {
+        return syscall.Signal(num), nil
+    }
 	if !strings.HasPrefix(signalName, "SIG") {
 		signalName = fmt.Sprintf("SIG%s", signalName)
 	}
