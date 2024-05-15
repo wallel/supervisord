@@ -99,19 +99,25 @@ type Process struct {
 	stdin      io.WriteCloser
 	StdoutLog  logger.Logger
 	StderrLog  logger.Logger
+
+	restartTimes *int32
+	restartTime  time.Time
 }
 
 // NewProcess creates new Process object
 func NewProcess(supervisorID string, config *config.Entry) *Process {
 	proc := &Process{supervisorID: supervisorID,
-		config:     config,
-		cmd:        nil,
-		startTime:  time.Unix(0, 0),
-		stopTime:   time.Unix(0, 0),
-		state:      Stopped,
-		inStart:    false,
-		stopByUser: false,
-		retryTimes: new(int32)}
+		config:       config,
+		cmd:          nil,
+		startTime:    time.Unix(0, 0),
+		stopTime:     time.Unix(0, 0),
+		state:        Stopped,
+		inStart:      false,
+		stopByUser:   false,
+		retryTimes:   new(int32),
+		restartTime:  time.Unix(0, 0),
+		restartTimes: new(int32),
+	}
 	proc.config = config
 	proc.cmd = nil
 	proc.addToCron()
@@ -140,7 +146,8 @@ func (p *Process) addToCron() {
 
 // Start process
 // Args:
-//  wait - true, wait the program started or failed
+//
+//	wait - true, wait the program started or failed
 func (p *Process) Start(wait bool) {
 	log.WithFields(log.Fields{"program": p.GetName()}).Info("try to start program")
 	p.lock.Lock()
@@ -182,6 +189,25 @@ func (p *Process) Start(wait bool) {
 				log.WithFields(log.Fields{"program": p.GetName()}).Info("Don't start the stopped program because its autorestart flag is false")
 				break
 			}
+
+			//距离上次重启时间超过了,统计间隔时间,则重置重启次数
+			if time.Now().Unix()-p.restartTime.Unix() >= int64(p.getRestartResetInterval()) {
+				atomic.StoreInt32(p.restartTimes, 0)
+			}
+
+			//统计间隔内,重启次数超过上限,不再重启
+			if atomic.LoadInt32(p.restartTimes) >= p.getRestartTimes() {
+				log.WithFields(log.Fields{"program": p.GetName()}).Info("Don't start the stopped program because its restart time is greater than restart times")
+				break
+			}
+			//没多重启一次,重启间隔时间增加
+			var times = atomic.LoadInt32(p.restartTimes)
+			if p.getRestartDelay() > 0 && times > 0 {
+				time.Sleep(time.Duration(p.getRestartDelay()*times) * time.Second)
+			}
+			//重启次数加1
+			atomic.AddInt32(p.restartTimes, 1)
+			p.restartTime = time.Now()
 		}
 		p.lock.Lock()
 		p.inStart = false
@@ -313,6 +339,17 @@ func (p *Process) getStartRetries() int32 {
 	return int32(p.config.GetInt("startretries", 3))
 }
 
+func (p *Process) getRestartTimes() int32 {
+	return int32(p.config.GetInt("restart_times", 3))
+}
+func (p *Process) getRestartDelay() int32 {
+	return int32(p.config.GetInt("restart_delay", 10))
+}
+
+func (p *Process) getRestartResetInterval() int32 {
+	return int32(p.config.GetInt("restart_reset_interval", 3600))
+}
+
 func (p *Process) isAutoStart() bool {
 	return p.config.GetString("autostart", "true") == "true"
 }
@@ -392,7 +429,6 @@ func (p *Process) getExitCodes() []int {
 }
 
 // check if the process is running or not
-//
 func (p *Process) isRunning() bool {
 	if p.cmd != nil && p.cmd.Process != nil {
 		if runtime.GOOS == "windows" {
@@ -506,7 +542,6 @@ func (p *Process) failToStartProgram(reason string, finishCb func()) {
 }
 
 // monitor if the program is in running before endTime
-//
 func (p *Process) monitorProgramIsRunning(endTime time.Time, monitorExited *int32, programExited *int32) {
 	// if time is not expired
 	for time.Now().Before(endTime) && atomic.LoadInt32(programExited) == 0 {
@@ -700,9 +735,9 @@ func (p *Process) changeStateTo(procState State) {
 // Signal sends signal to the process
 //
 // Args:
-//   sig - the signal to the process
-//   sigChildren - if true, sends the same signal to the process and its children
 //
+//	sig - the signal to the process
+//	sigChildren - if true, sends the same signal to the process and its children
 func (p *Process) Signal(sig os.Signal, sigChildren bool) error {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
@@ -727,9 +762,9 @@ func (p *Process) sendSignals(sigs []string, sigChildren bool) {
 // send signal to the process
 //
 // Args:
-//    sig - the signal to be sent
-//    sigChildren - if true, the signal also will be sent to children processes too
 //
+//	sig - the signal to be sent
+//	sigChildren - if true, the signal also will be sent to children processes too
 func (p *Process) sendSignal(sig os.Signal, sigChildren bool) error {
 	if p.cmd != nil && p.cmd.Process != nil {
 		log.WithFields(log.Fields{"program": p.GetName(), "signal": sig}).Info("Send signal to program")
