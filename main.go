@@ -18,6 +18,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var BuildVersion string = ""
+
 // Options the command line options
 type Options struct {
 	Configuration string `short:"c" long:"configuration" description:"the configuration file"`
@@ -28,10 +30,15 @@ type Options struct {
 func init() {
 	nullLogger := logger.NewNullLogger(logger.NewNullLogEventEmitter())
 	log.SetOutput(nullLogger)
-	if runtime.GOOS == "windows" {
-		log.SetFormatter(&log.TextFormatter{DisableColors: true, FullTimestamp: true})
+	logFormat := os.Getenv("LOG_FORMAT")
+	if logFormat == "json" {
+		log.SetFormatter(&log.JSONFormatter{})
 	} else {
-		log.SetFormatter(&log.TextFormatter{DisableColors: false, FullTimestamp: true})
+		if runtime.GOOS == "windows" {
+			log.SetFormatter(&log.TextFormatter{DisableColors: true, FullTimestamp: true})
+		} else {
+			log.SetFormatter(&log.TextFormatter{DisableColors: false, FullTimestamp: true})
+		}
 	}
 	log.SetLevel(log.DebugLevel)
 }
@@ -106,7 +113,8 @@ func findSupervisordConf() (string, error) {
 		"/etc/supervisord.conf",
 		"/etc/supervisor/supervisord.conf",
 		"../etc/supervisord.conf",
-		"../supervisord.conf"}
+		"../supervisord.conf",
+		"./supervisord.conf"}
 
 	for _, file := range possibleSupervisordConf {
 		if _, err := os.Stat(file); err == nil {
@@ -157,6 +165,7 @@ func getSupervisordLogFile(configFile string) string {
 }
 
 func main() {
+	if BuildVersion != "" { VERSION = BuildVersion }
 	ReapZombie()
 
 	// when execute `supervisord` without sub-command, it should start the server
