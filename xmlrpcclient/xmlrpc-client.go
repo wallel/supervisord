@@ -259,6 +259,21 @@ func (r *XMLRPCClient) Shutdown() (reply ShutdownReply, err error) {
 	return
 }
 
+// Stdin requests send stdin to program
+func (r *XMLRPCClient) Stdin(name string, chars string) (reply types.BooleanReply, err error) {
+	ins := struct {
+		Name  string
+		Chars string
+	}{name, chars}
+	r.post("supervisor.SendProcessStdin", &ins, func(body io.ReadCloser, procError error) {
+		err = procError
+		if err == nil {
+			err = xml.DecodeClientResponse(body, &reply)
+		}
+	})
+	return
+}
+
 // ReloadConfig requests supervisord to reload its configuration
 func (r *XMLRPCClient) ReloadConfig() (reply types.ReloadConfigResult, err error) {
 	ins := struct{}{}

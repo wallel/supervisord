@@ -55,6 +55,8 @@ type SignalCommand struct {
 // LogtailCommand tail the stdout/stderr log of program through http interface
 type LogtailCommand struct {
 }
+type StdinCommand struct {
+}
 
 // CmdCheckWrapperCommand A wrapper can be used to check whether
 // number of parameters is valid or not
@@ -78,6 +80,7 @@ var reloadCommand = CmdCheckWrapperCommand{&ReloadCommand{}, 0, ""}
 var pidCommand = CmdCheckWrapperCommand{&PidCommand{}, 1, "pid <program>"}
 var signalCommand = CmdCheckWrapperCommand{&SignalCommand{}, 2, "signal <signal_name> <program>[...]"}
 var logtailCommand = CmdCheckWrapperCommand{&LogtailCommand{}, 1, "logtail <program>"}
+var stdinCommand = CmdCheckWrapperCommand{&StdinCommand{}, 2, "stdin <program> <chars>"}
 
 func (x *CtlCommand) getServerURL() string {
 	options.Configuration, _ = findSupervisordConf()
@@ -171,6 +174,9 @@ func (x *CtlCommand) Execute(args []string) error {
 		x.signal(rpcc, sigName, processes)
 	case "pid":
 		x.getPid(rpcc, args[1])
+	case "stdin":
+		name, chars := args[1], args[2:]
+		x.signal(rpcc, name, chars)
 	default:
 		fmt.Println("unknown command")
 	}
@@ -294,6 +300,17 @@ func (x *CtlCommand) signal(rpcc *xmlrpcclient.XMLRPCClient, sigName string, pro
 	}
 }
 
+// send chars to one process's stdin
+func (x *CtlCommand) stdin(rpcc *xmlrpcclient.XMLRPCClient, name string, chars string) {
+	reply, err := rpcc.Stdin(name, chars)
+	if err == nil && reply.Success {
+		fmt.Printf("Succeed to send chars[ %s ] to process [%s]\n", chars, name)
+	} else {
+		fmt.Printf("Fail to send chars[ %s ] to process [%s]\n", chars, name)
+		os.Exit(1)
+	}
+}
+
 // get the pid of running program
 func (x *CtlCommand) getPid(rpcc *xmlrpcclient.XMLRPCClient, process string) {
 	procInfo, err := rpcc.GetProcessInfo(process)
@@ -398,6 +415,16 @@ func (rc *RestartCommand) Execute(args []string) error {
 // Execute shutdown the supervisor
 func (sc *ShutdownCommand) Execute(args []string) error {
 	ctlCommand.shutdown(ctlCommand.createRPCClient())
+	return nil
+}
+func (sc *StdinCommand) Execute(args []string) error {
+	if len(args) < 2 {
+		fmt.Println("Usage: supervisord ctl stdin <program> <chars>")
+		return nil
+	}
+	name := args[0]
+	chars := strings.Join(args[1:], " ")
+	ctlCommand.stdin(ctlCommand.createRPCClient(), name, chars)
 	return nil
 }
 
@@ -512,5 +539,8 @@ func init() {
 		"get the standard output&standard error of the program",
 		"get the standard output&standard error of the program",
 		&logtailCommand)
-
+	ctlCmd.AddCommand("stdin",
+		"send chars to program's stdin",
+		"send chars to program's stdin",
+		&stdinCommand)
 }
