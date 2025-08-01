@@ -35,6 +35,12 @@ type ProcessSignal struct {
 	Signal string
 }
 
+// ProcessStdin  process stdin from client
+type ProcessStdin struct {
+	Name  string // program name
+	Chars string // inputs from client
+}
+
 // BooleanReply any rpc result with BooleanReply type
 type BooleanReply struct {
 	Success bool

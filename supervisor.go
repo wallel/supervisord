@@ -42,12 +42,6 @@ type StartProcessArgs struct {
 	Wait bool   `default:"true"` // Wait the program starting finished
 }
 
-// ProcessStdin  process stdin from client
-type ProcessStdin struct {
-	Name  string // program name
-	Chars string // inputs from client
-}
-
 // RemoteCommEvent remove communication event from client side
 type RemoteCommEvent struct {
 	Type string // the event type
@@ -405,7 +399,7 @@ func (s *Supervisor) SignalAllProcesses(r *http.Request, args *types.ProcessSign
 }
 
 // SendProcessStdin send data to program through stdin
-func (s *Supervisor) SendProcessStdin(r *http.Request, args *ProcessStdin, reply *struct{ Success bool }) error {
+func (s *Supervisor) SendProcessStdin(r *http.Request, args *types.ProcessStdin, reply *struct{ Success bool }) error {
 	proc := s.procMgr.Find(args.Name)
 	if proc == nil {
 		log.WithFields(log.Fields{"program": args.Name}).Error("program does not exist")

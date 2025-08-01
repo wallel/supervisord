@@ -261,10 +261,7 @@ func (r *XMLRPCClient) Shutdown() (reply ShutdownReply, err error) {
 
 // Stdin requests send stdin to program
 func (r *XMLRPCClient) Stdin(name string, chars string) (reply types.BooleanReply, err error) {
-	ins := struct {
-		Name  string
-		Chars string
-	}{name, chars}
+	ins :=types.ProcessStdin{name, chars}
 	r.post("supervisor.SendProcessStdin", &ins, func(body io.ReadCloser, procError error) {
 		err = procError
 		if err == nil {

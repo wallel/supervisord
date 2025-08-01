@@ -306,7 +306,11 @@ func (x *CtlCommand) stdin(rpcc *xmlrpcclient.XMLRPCClient, name string, chars s
 	if err == nil && reply.Success {
 		fmt.Printf("Succeed to send chars[ %s ] to process [%s]\n", chars, name)
 	} else {
-		fmt.Printf("Fail to send chars[ %s ] to process [%s]\n", chars, name)
+		if err != nil {
+			fmt.Printf("Fail to send chars[ %s ] to process [%s]:%s\n", chars, name, err)
+		} else {
+			fmt.Printf("Fail to send chars[ %s ] to process [%s]\n", chars, name)
+		}
 		os.Exit(1)
 	}
 }
